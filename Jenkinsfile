@@ -1,6 +1,6 @@
 // Online Boutique (fork microservices-demo) — chỉ build service có thay đổi trong src/<service>/
-//   branch dev  -> Harbor boutique/<svc>:dev-<sha>  -> boutique-gitops values-dev.yaml  -> ns boutique-dev
-//   branch main -> Harbor boutique/<svc>:prod-<sha> -> boutique-gitops values-prod.yaml -> ns boutique-prod
+//   branch dev  -> Harbor boutique/<svc>:dev-<sha>  -> boutique-gitops envs/dev/<svc>/values.yaml -> ns boutique-dev
+//   branch main -> Harbor boutique/<svc>:prod-<sha> -> boutique-gitops envs/prod/<svc>/values.yaml-> ns boutique-prod
 pipeline {
   agent any
   parameters {
@@ -73,11 +73,12 @@ pipeline {
             cd gitops
             git config user.name  "Jenkins"
             git config user.email "jenkins@boutique.local"
-            VFILE="charts/boutique/values-${DEPLOY_ENV}.yaml"
             for S in $SERVICES; do
-              yq -i ".services.${S}.tag = \\"${TAG}\\"" "$VFILE"
+              VFILE="envs/${DEPLOY_ENV}/${S}/values.yaml"          # mỗi service 1 thư mục
+              [ -f "$VFILE" ] || { echo "Bỏ qua $S: chưa có $VFILE"; continue; }
+              yq -i ".image.tag = \\"${TAG}\\"" "$VFILE"
+              git add "$VFILE"
             done
-            git add "$VFILE"
             git commit -m "boutique(${DEPLOY_ENV}): ${SERVICES} -> ${TAG}" || { echo "Không có thay đổi"; exit 0; }
             for i in 1 2 3; do git pull --rebase && git push && exit 0; sleep 5; done
             exit 1
